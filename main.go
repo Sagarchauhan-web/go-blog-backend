@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,12 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+	"github.com/sagarchauhan-web/rssagg/internal/database"
 )
+
+type apiConfig struct {
+	DB *database.Queries
+}
 
 func main() {
 	fmt.Println("Starting...")
@@ -19,6 +25,20 @@ func main() {
 	portString := os.Getenv("PORT")
 	if portString == "" {
 		log.Fatal("Port is not found in the environment variable")
+	}
+
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("dbURL is not found in the environment variable")
+	}
+
+	conn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Cant connect to database: ", err)
+	}
+
+	apiCfg := apiConfig{
+		DB: database.New(conn),
 	}
 
 	router := chi.NewRouter()
@@ -32,10 +52,10 @@ func main() {
 		MaxAge: 300,
 	}))
 
-	v1Router := chi.NewRouter()
+	v1Router := chi.NewRouter();
 
-	v1Router.Get("/healthz", handlerReadiness)
 	v1Router.Get("/err", handlerErr)
+	v1Router.Get("/users", apiCfg.handlerCreateUser)
 
 	router.Mount("/v1", v1Router)
 
@@ -45,9 +65,5 @@ func main() {
 	}
 
 	fmt.Println("Server Starting on Port:", portString)
-	err := srv.ListenAndServe()
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	srv.ListenAndServe()
 }
